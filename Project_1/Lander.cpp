@@ -163,6 +163,28 @@
 #include "Lander_Control.h"
 
 /*
+  Global Variables
+*/
+
+// Updates is sensors are working
+// 0: X-vel
+// 1: Y-vel
+// 2: X-pos
+// 3: Y-pos
+// 4: Angle
+// 5: Dist
+bool broken[6] = {true, true, true, true, true, true};
+
+// Store the last 5 values of each sensor
+double xvel_sensor[5];
+double yvel_sensor[5];
+double xpos_sensor[5];
+double ypos_sensor[5];
+double angle_sensor[5];
+double dist_sensor[5];
+bool init_gv = false;
+
+/*
   Helper functions
 */
 
@@ -171,12 +193,10 @@ double GetAvg(double (&arr)[5]) {
   double avg = 0;
   int count = 0;
   for (int i = 0; i < 5; i++) {
-    if (arr[i] != NULL) {
-      count += 5 - i;
-      avg += (5 - i) * arr[i];
-    }
+    count += 5 - i;
+    avg += (5 - i) * arr[i];
   }
-  return count == NULL ? NULL : avg/count;
+  return avg/count;
 }
 
 // Returns noise reduced value
@@ -200,9 +220,9 @@ double UpdateHistory(double val, double (&his)[5]) {
 
 // Returns the X velocity
 // Removes the noise, checks if the sensor is working
-double Velocity_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
+double Velocity_X_R() {
   // Get the weighted average from the recent history of X locations
-  double avg = GetAvg(x_his);
+  double avg = GetAvg(xvel_sensor);
 
   // Get the noisy input
   double x_sen = Velocity_X();
@@ -217,7 +237,7 @@ double Velocity_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
     bool works = IsOutlier(avg, x_r, 0.25);
 
     // If the sensor works, update history and return sensor
-    if (works) return UpdateHistory(x_r, x_his);
+    if (works) return UpdateHistory(x_r, xvel_sensor);
 
     // If the sensor is newly broken, update broken list
     broken[0] = false;
@@ -225,9 +245,9 @@ double Velocity_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
 
   // If broken, try to use X position to determine velocity
   // If X position sensor is also not broken
-  double pos_avg = GetAvg(x_sec);
+  double pos_avg = GetAvg(xvel_sensor);
   double x_pos = ReduceNoise(pos_avg, Position_X());
-  double x_r2 = UpdateHistory(x_pos - x_sec[0], x_his);
+  double x_r2 = UpdateHistory(x_pos - xpos_sensor[0], xvel_sensor);
   if (!broken[2]) return x_r2;
 
   // If both sensors are broken, return their average
@@ -237,9 +257,9 @@ double Velocity_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
 
 // Returns the Y velocity
 // Removes the noise, checks if the sensor is working
-double Velocity_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
+double Velocity_Y_R() {
   // Get the weighted average from the recent history of X locations
-  double avg = GetAvg(y_his);
+  double avg = GetAvg(yvel_sensor);
 
   // Get the noisy input
   double y_sen = Velocity_Y();
@@ -254,7 +274,7 @@ double Velocity_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
     bool works = IsOutlier(avg, y_r, 0.25);
 
     // If the sensor works, update history and return sensor
-    if (works) return UpdateHistory(y_r, y_his);
+    if (works) return UpdateHistory(y_r, yvel_sensor);
 
     // If the sensor is newly broken, update broken list
     broken[1] = false;
@@ -262,9 +282,9 @@ double Velocity_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
 
   // If broken, try to use X position to determine velocity
   // If X position sensor is also not broken
-  double pos_avg = GetAvg(y_sec);
+  double pos_avg = GetAvg(ypos_sensor);
   double y_pos = ReduceNoise(pos_avg, Position_Y());
-  double y_r2 = UpdateHistory(y_pos - y_sec[0], y_his);
+  double y_r2 = UpdateHistory(y_pos - ypos_sensor[0], yvel_sensor);
   if (!broken[3]) return y_r2;
 
   // If both sensors are broken, return their average
@@ -274,9 +294,9 @@ double Velocity_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
 
 // Returns the X position
 // Removes the noise, checks if the sensor is working
-double Position_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
+double Position_X_R() {
   // Get the weighted average from the recent history of X locations
-  double avg = GetAvg(x_his);
+  double avg = GetAvg(xpos_sensor);
 
   // Get the noisy input
   double x_sen = Position_X();
@@ -291,7 +311,7 @@ double Position_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
     bool works = IsOutlier(avg, x_r, 0.25);
 
     // If the sensor works, update history and return sensor
-    if (works) return UpdateHistory(x_r, x_his);
+    if (works) return UpdateHistory(x_r, xpos_sensor);
 
     // If the sensor is newly broken, update broken list
     broken[2]= false;
@@ -299,9 +319,9 @@ double Position_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
 
   // If broken, try to use X velocity to determine position
   // If X position sensor is also not broken
-  double vel_avg = GetAvg(x_sec);
+  double vel_avg = GetAvg(xvel_sensor);
   double x_vel = ReduceNoise(vel_avg, Velocity_X());
-  double x_r2 = UpdateHistory(x_vel - x_sec[0], x_his);
+  double x_r2 = UpdateHistory(xpos_sensor[0] + x_vel, xpos_sensor);
   if (!broken[0]) return x_r2;
 
   // If both sensors are broken, return their average
@@ -311,9 +331,9 @@ double Position_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
 
 // Returns the Y position
 // Removes the noise, checks if the sensor is working
-double Position_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
+double Position_Y_R() {
   // Get the weighted average from the recent history of Y locations
-  double avg = GetAvg(y_his);
+  double avg = GetAvg(ypos_sensor);
 
   // Get the noisy input
   double y_sen = Position_Y();
@@ -328,7 +348,7 @@ double Position_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
     bool works = IsOutlier(avg, y_r, 0.25);
 
     // If the sensor works, update history and return sensor
-    if (works) return UpdateHistory(y_r, y_his);
+    if (works) return UpdateHistory(y_r, ypos_sensor);
 
     // If the sensor is newly broken, update broken list
     broken[3]= false;
@@ -336,9 +356,9 @@ double Position_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
 
   // If broken, try to use X velocity to determine position
   // If X position sensor is also not broken
-  double vel_avg = GetAvg(y_sec);
+  double vel_avg = GetAvg(yvel_sensor);
   double y_vel = ReduceNoise(vel_avg, Velocity_Y());
-  double y_r2 = UpdateHistory(y_vel - y_sec[0], y_his);
+  double y_r2 = UpdateHistory(ypos_sensor[0] + y_vel, ypos_sensor);
   if (!broken[0]) return y_r2;
 
   // If both sensors are broken, return their average
@@ -398,22 +418,17 @@ void Lander_Control(void)
         I'll give you zero.
 **************************************************/
 
-  // Updates is sensors are working
-  // 0: X-vel
-  // 1: Y-vel
-  // 2: X-pos
-  // 3: Y-pos
-  // 4: Angle
-  // 5: Dist
-  bool sensors[6] = {true, true, true, true, true, true};
-
-  // Store the last 5 values of each sensor
-  double xvel_sensor[5] = {Velocity_X(), NULL, NULL, NULL, NULL};
-  double yvel_sensor[5] = {Velocity_Y(), NULL, NULL, NULL, NULL};
-  double xpos_sensor[5] = {Position_X(), NULL, NULL, NULL, NULL};
-  double ypos_sensor[5] = {Position_Y(), NULL, NULL, NULL, NULL};
-  double angle_sensor[5] = {Angle(), NULL, NULL, NULL, NULL};
-  double dist_sensor[5] = {RangeDist(), NULL, NULL, NULL, NULL};
+  if (!init_gv) {
+    for (int i = 0; i< 5; i++) {
+      xvel_sensor[i] = Velocity_X();
+      yvel_sensor[i] = Velocity_Y();
+      xpos_sensor[i] = Position_X();
+      ypos_sensor[i] = Position_Y();
+      angle_sensor[i] = Angle();
+      dist_sensor[i] = RangeDist();
+    }
+    init_gv = true;
+  }
 
   double VXlim;
   double VYlim;
@@ -423,19 +438,19 @@ void Lander_Control(void)
   // move faster, decrease speed limits as the module
   // approaches landing. You may need to be more conservative
   // with velocity limits when things fail.
-  double xpr = Position_X_R(xpos_sensor, xvel_sensor, sensors);
+  double xpr = Position_X_R();
   if (fabs(xpr-PLAT_X)>200) VXlim=25;
   else if (fabs(xpr-PLAT_X)>100) VXlim=15;
   else VXlim=5;
 
-  double ypr = Position_Y_R(ypos_sensor, yvel_sensor, sensors);
+  double ypr = Position_Y_R();
   if (PLAT_Y-ypr>200) VYlim=-20;
   else if (PLAT_Y-ypr>100) VYlim=-10;  // These are negative because they
   else VYlim=-4;				       // limit descent velocity
 
   // Ensure we will be OVER the platform when we land
-  double xvr = Velocity_X_R(xvel_sensor, xpos_sensor, sensors);
-  double yvr = Velocity_Y_R(yvel_sensor, ypos_sensor, sensors);
+  double xvr = Velocity_X_R();
+  double yvr = Velocity_Y_R();
   if (fabs(PLAT_X-xpr)/fabs(xvr)>1.25*fabs(PLAT_Y-ypr)/fabs(yvr)) VYlim=0;
 
   // IMPORTANT NOTE: The code below assumes all components working
