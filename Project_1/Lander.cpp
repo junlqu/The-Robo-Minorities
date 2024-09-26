@@ -162,6 +162,190 @@
 
 #include "Lander_Control.h"
 
+/*
+  Helper functions
+*/
+
+// Returns the weighted average of a 5-array
+double GetAvg(double (&arr)[5]) {
+  double avg = 0;
+  int count = 0;
+  for (int i = 0; i < 5; i++) {
+    if (arr[i] != NULL) {
+      count += 5 - i;
+      avg += (5 - i) * arr[i];
+    }
+  }
+  return count == NULL ? NULL : avg/count;
+}
+
+// Returns noise reduced value
+double ReduceNoise(double avg, double sensor) {
+  return (avg + 3 * sensor)/4;
+}
+
+// Returns if the input value is within delta of the avg
+bool IsOutlier(double avg, double val, double delta) {
+  return (val/avg > (1 + delta) || val/avg < (1 - delta)) ? false : true;
+}
+
+// Updates the history and returns the last value
+double UpdateHistory(double val, double (&his)[5]) {
+  for (int i = 4; i > 0; i--) {
+      his[i] = his[i - 1];
+    }
+    his[0] = val;
+    return val;
+}
+
+// Returns the X velocity
+// Removes the noise, checks if the sensor is working
+double Velocity_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
+  // Get the weighted average from the recent history of X locations
+  double avg = GetAvg(x_his);
+
+  // Get the noisy input
+  double x_sen = Velocity_X();
+
+  // Get noise reduce value
+  double x_r = ReduceNoise(avg, x_sen);
+
+  // If the sensor is not broken
+  if (!broken[0]) {
+    // Check if the sensor is broken 
+    // >25% difference from avg
+    bool works = IsOutlier(avg, x_r, 0.25);
+
+    // If the sensor works, update history and return sensor
+    if (works) return UpdateHistory(x_r, x_his);
+
+    // If the sensor is newly broken, update broken list
+    broken[0] = false;
+  }
+
+  // If broken, try to use X position to determine velocity
+  // If X position sensor is also not broken
+  double pos_avg = GetAvg(x_sec);
+  double x_pos = ReduceNoise(pos_avg, Position_X());
+  double x_r2 = UpdateHistory(x_pos - x_sec[0], x_his);
+  if (!broken[2]) return x_r2;
+
+  // If both sensors are broken, return their average
+  // This is beyond the scope of the problem
+  return (x_r + x_r2)/2;
+}
+
+// Returns the Y velocity
+// Removes the noise, checks if the sensor is working
+double Velocity_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
+  // Get the weighted average from the recent history of X locations
+  double avg = GetAvg(y_his);
+
+  // Get the noisy input
+  double y_sen = Velocity_Y();
+
+  // Get noise reduce value
+  double y_r = ReduceNoise(avg, y_sen);
+
+  // If the sensor is not broken
+  if (!broken[1]) {
+    // Check if the sensor is broken 
+    // >25% difference from avg
+    bool works = IsOutlier(avg, y_r, 0.25);
+
+    // If the sensor works, update history and return sensor
+    if (works) return UpdateHistory(y_r, y_his);
+
+    // If the sensor is newly broken, update broken list
+    broken[1] = false;
+  }
+
+  // If broken, try to use X position to determine velocity
+  // If X position sensor is also not broken
+  double pos_avg = GetAvg(y_sec);
+  double y_pos = ReduceNoise(pos_avg, Position_Y());
+  double y_r2 = UpdateHistory(y_pos - y_sec[0], y_his);
+  if (!broken[3]) return y_r2;
+
+  // If both sensors are broken, return their average
+  // This is beyond the scope of the problem
+  return (y_r + y_r2)/2;
+}
+
+// Returns the X position
+// Removes the noise, checks if the sensor is working
+double Position_X_R(double (&x_his)[5], double (&x_sec)[5], bool (&broken)[6]) {
+  // Get the weighted average from the recent history of X locations
+  double avg = GetAvg(x_his);
+
+  // Get the noisy input
+  double x_sen = Position_X();
+
+  // Get noise reduce value
+  double x_r = ReduceNoise(avg, x_sen);
+
+  // If the sensor is not broken
+  if (!broken[2]) {
+    // Check if the sensor is broken 
+    // >25% difference from avg
+    bool works = IsOutlier(avg, x_r, 0.25);
+
+    // If the sensor works, update history and return sensor
+    if (works) return UpdateHistory(x_r, x_his);
+
+    // If the sensor is newly broken, update broken list
+    broken[2]= false;
+  }
+
+  // If broken, try to use X velocity to determine position
+  // If X position sensor is also not broken
+  double vel_avg = GetAvg(x_sec);
+  double x_vel = ReduceNoise(vel_avg, Velocity_X());
+  double x_r2 = UpdateHistory(x_vel - x_sec[0], x_his);
+  if (!broken[0]) return x_r2;
+
+  // If both sensors are broken, return their average
+  // This is beyond the scope of the problem
+  return (x_r + x_r2)/2;
+}
+
+// Returns the Y position
+// Removes the noise, checks if the sensor is working
+double Position_Y_R(double (&y_his)[5], double (&y_sec)[5], bool (&broken)[6]) {
+  // Get the weighted average from the recent history of Y locations
+  double avg = GetAvg(y_his);
+
+  // Get the noisy input
+  double y_sen = Position_Y();
+
+  // Get noise reduce value
+  double y_r = ReduceNoise(avg, y_sen);
+
+  // If the sensor is not broken
+  if (!broken[3]) {
+    // Check if the sensor is broken 
+    // >25% difference from avg
+    bool works = IsOutlier(avg, y_r, 0.25);
+
+    // If the sensor works, update history and return sensor
+    if (works) return UpdateHistory(y_r, y_his);
+
+    // If the sensor is newly broken, update broken list
+    broken[3]= false;
+  }
+
+  // If broken, try to use X velocity to determine position
+  // If X position sensor is also not broken
+  double vel_avg = GetAvg(y_sec);
+  double y_vel = ReduceNoise(vel_avg, Velocity_Y());
+  double y_r2 = UpdateHistory(y_vel - y_sec[0], y_his);
+  if (!broken[0]) return y_r2;
+
+  // If both sensors are broken, return their average
+  // This is beyond the scope of the problem
+  return (y_r + y_r2)/2;
+}
+
 void Lander_Control(void)
 {
  /*
@@ -214,76 +398,97 @@ void Lander_Control(void)
         I'll give you zero.
 **************************************************/
 
- double VXlim;
- double VYlim;
+  // Updates is sensors are working
+  // 0: X-vel
+  // 1: Y-vel
+  // 2: X-pos
+  // 3: Y-pos
+  // 4: Angle
+  // 5: Dist
+  bool sensors[6] = {true, true, true, true, true, true};
 
- // Set velocity limits depending on distance to platform.
- // If the module is far from the platform allow it to
- // move faster, decrease speed limits as the module
- // approaches landing. You may need to be more conservative
- // with velocity limits when things fail.
- if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
- else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
- else VXlim=5;
+  // Store the last 5 values of each sensor
+  double xvel_sensor[5] = {Velocity_X(), NULL, NULL, NULL, NULL};
+  double yvel_sensor[5] = {Velocity_Y(), NULL, NULL, NULL, NULL};
+  double xpos_sensor[5] = {Position_X(), NULL, NULL, NULL, NULL};
+  double ypos_sensor[5] = {Position_Y(), NULL, NULL, NULL, NULL};
+  double angle_sensor[5] = {Angle(), NULL, NULL, NULL, NULL};
+  double dist_sensor[5] = {RangeDist(), NULL, NULL, NULL, NULL};
 
- if (PLAT_Y-Position_Y()>200) VYlim=-20;
- else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
- else VYlim=-4;				       // limit descent velocity
+  double VXlim;
+  double VYlim;
 
- // Ensure we will be OVER the platform when we land
- if (fabs(PLAT_X-Position_X())/fabs(Velocity_X())>1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y())) VYlim=0;
+  // Set velocity limits depending on distance to platform.
+  // If the module is far from the platform allow it to
+  // move faster, decrease speed limits as the module
+  // approaches landing. You may need to be more conservative
+  // with velocity limits when things fail.
+  double xpr = Position_X_R(xpos_sensor, xvel_sensor, sensors);
+  if (fabs(xpr-PLAT_X)>200) VXlim=25;
+  else if (fabs(xpr-PLAT_X)>100) VXlim=15;
+  else VXlim=5;
 
- // IMPORTANT NOTE: The code below assumes all components working
- // properly. IT MAY OR MAY NOT BE USEFUL TO YOU when components
- // fail. More likely, you will need a set of case-based code
- // chunks, each of which works under particular failure conditions.
+  double ypr = Position_Y_R(ypos_sensor, yvel_sensor, sensors);
+  if (PLAT_Y-ypr>200) VYlim=-20;
+  else if (PLAT_Y-ypr>100) VYlim=-10;  // These are negative because they
+  else VYlim=-4;				       // limit descent velocity
 
- // Check for rotation away from zero degrees - Rotate first,
- // use thrusters only when not rotating to avoid adding
- // velocity components along the rotation directions
- // Note that only the latest Rotate() command has any
- // effect, i.e. the rotation angle does not accumulate
- // for successive calls.
+  // Ensure we will be OVER the platform when we land
+  double xvr = Velocity_X_R(xvel_sensor, xpos_sensor, sensors);
+  double yvr = Velocity_Y_R(yvel_sensor, ypos_sensor, sensors);
+  if (fabs(PLAT_X-xpr)/fabs(xvr)>1.25*fabs(PLAT_Y-ypr)/fabs(yvr)) VYlim=0;
 
- if (Angle()>1&&Angle()<359)
- {
-  if (Angle()>=180) Rotate(360-Angle());
-  else Rotate(-Angle());
-  return;
- }
+  // IMPORTANT NOTE: The code below assumes all components working
+  // properly. IT MAY OR MAY NOT BE USEFUL TO YOU when components
+  // fail. More likely, you will need a set of case-based code
+  // chunks, each of which works under particular failure conditions.
 
- // Module is oriented properly, check for horizontal position
- // and set thrusters appropriately.
- if (Position_X()>PLAT_X)
- {
-  // Lander is to the LEFT of the landing platform, use Right thrusters to move
-  // lander to the left.
-  Left_Thruster(0);	// Make sure we're not fighting ourselves here!
-  if (Velocity_X()>(-VXlim)) Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
+  // Check for rotation away from zero degrees - Rotate first,
+  // use thrusters only when not rotating to avoid adding
+  // velocity components along the rotation directions
+  // Note that only the latest Rotate() command has any
+  // effect, i.e. the rotation angle does not accumulate
+  // for successive calls.
+
+  if (Angle()>1&&Angle()<359)
+  {
+    if (Angle()>=180) Rotate(360-Angle());
+    else Rotate(-Angle());
+    return;
+  }
+
+  // Module is oriented properly, check for horizontal position
+  // and set thrusters appropriately.
+  if (xpr>PLAT_X)
+  {
+    // Lander is to the LEFT of the landing platform, use Right thrusters to move
+    // lander to the left.
+    Left_Thruster(0);	// Make sure we're not fighting ourselves here!
+    if (xvr>(-VXlim)) Right_Thruster((VXlim+fmin(0,xvr))/VXlim);
+    else
+    {
+    // Exceeded velocity limit, brake
+    Right_Thruster(0);
+    Left_Thruster(fabs(VXlim-xvr));
+    }
+  }
   else
   {
-   // Exceeded velocity limit, brake
-   Right_Thruster(0);
-   Left_Thruster(fabs(VXlim-Velocity_X()));
+    // Lander is to the RIGHT of the landing platform, opposite from above
+    Right_Thruster(0);
+    if (xvr<VXlim) Left_Thruster((VXlim-fmax(0,xvr))/VXlim);
+    else
+    {
+    Left_Thruster(0);
+    Right_Thruster(fabs(VXlim-xvr));
+    }
   }
- }
- else
- {
-  // Lander is to the RIGHT of the landing platform, opposite from above
-  Right_Thruster(0);
-  if (Velocity_X()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
-  else
-  {
-   Left_Thruster(0);
-   Right_Thruster(fabs(VXlim-Velocity_X()));
-  }
- }
 
- // Vertical adjustments. Basically, keep the module below the limit for
- // vertical velocity and allow for continuous descent. We trust
- // Safety_Override() to save us from crashing with the ground.
- if (Velocity_Y()<VYlim) Main_Thruster(1.0);
- else Main_Thruster(0);
+  // Vertical adjustments. Basically, keep the module below the limit for
+  // vertical velocity and allow for continuous descent. We trust
+  // Safety_Override() to save us from crashing with the ground.
+  if (yvr<VYlim) Main_Thruster(1.0);
+  else Main_Thruster(0);
 }
 
 void Safety_Override(void)
